@@ -113,6 +113,24 @@ class HLDLC:
 
             logger_hldlc.debug(f"Buffer: {buffer}")
 
+    async def read_line(self):
+        buffer = b''
+        while True:
+            byte = await self.reader.read(1)
+            logger_hldlc.debug(f"read byte: {byte}")
+            if byte == b"\n":
+                # End of frame detected
+                if len(buffer) > 0:
+                    logger_hldlc.debug(f"End detected. Buffer: {buffer}")
+                    return buffer
+                else:
+                    start_flag_detected = True
+                logger_hldlc.debug("Start flag detected.")
+            else:
+                buffer += byte
+
+            logger_hldlc.debug(f"Buffer: {buffer}")
+
     def _decode_frame(self, frame):
         destuffed_frame = self._bit_destuffing(frame)
         address, control, data_with_fcs = (destuffed_frame[0:1], destuffed_frame[1:2], destuffed_frame[2:])
@@ -156,7 +174,7 @@ def read_serial():
             #time.sleep(2)
 """
 
-async def main():
+async def main_communication_selftest():
     hldlc = HLDLC()
     await hldlc.open()
 
@@ -194,10 +212,37 @@ async def main():
 
     await hldlc.close()
 
+async def main_hldlc_stm32_test():
+    hldlc = HLDLC()
+    await hldlc.open()
+
+    received_line = await hldlc.read_line()
+
+    logger_main.debug(f"Ground receiving:")
+    logger_main.debug('Received line:' + str(received_line))
+
+    ping_cmd = PusTelecommand(service=17, subservice=1, apid=0x01)
+    cmd_as_bytes = ping_cmd.pack()
+    logger_main.debug(f"Ground -> Spacecraft sending:")
+    logger_main.debug(f"Ping telecommand [17,1] (hex): [{cmd_as_bytes.hex(sep=',')}]")
+
+    address = 0xA2
+    control = 0x03
+    data = cmd_as_bytes
+
+    await hldlc.send_frame(address, control, data)
+
+    while True:
+        received_line = await hldlc.read_line()
+
+        logger_main.debug(f"Ground receiving:")
+        logger_main.debug('Received line:' + str(received_line))
+
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     #read_serial()
-    asyncio.run(main())
+    #asyncio.run(main_communication_selftest())
+    asyncio.run(main_hldlc_stm32_test())
 
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/

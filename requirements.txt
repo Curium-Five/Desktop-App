@@ -1,2 +1,6 @@
+crcmod==1.7
+deprecation==2.1.0
+packaging==23.1
 pyserial==3.5
 pyserial-asyncio==0.6
+spacepackets==0.17.0
