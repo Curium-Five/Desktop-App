@@ -3,20 +3,22 @@ import time
 # HLDLC library: https://python-hdlc-controller.readthedocs.io/en/latest/usage.html
 # ECSS, possibly use: https://gitlab.com/acubesat/obc/ecss-services
 
+import logging
 import asyncio
 import serial
 import serial_asyncio
 import struct
 
+logging.basicConfig(level=logging.DEBUG)
 
 class HLDLC:
     FLAG_SEQUENCE = 0x7E
     ESCAPE_CHARACTER = 0x7D
     BIT_STUFFING_XOR = 0x20
 
-    print(f"FLAG_SEQUENCE: {FLAG_SEQUENCE}")
-    print(f"ESCAPE_CHARACTER: {ESCAPE_CHARACTER}")
-    print(f"BIT_STUFFING_XOR: {BIT_STUFFING_XOR}")
+    logging.debug(f"FLAG_SEQUENCE: {FLAG_SEQUENCE}")
+    logging.debug(f"ESCAPE_CHARACTER: {ESCAPE_CHARACTER}")
+    logging.debug(f"BIT_STUFFING_XOR: {BIT_STUFFING_XOR}")
 
     def __init__(self):
         self.reader = None
@@ -36,7 +38,7 @@ class HLDLC:
 
     async def send_frame(self, address, control, data):
         frame = self._build_frame(address, control, data)
-        print(f"sending frame: {frame}")
+        logging.debug(f"sending frame: {frame}")
         self.writer.write(frame)
         await self.writer.drain()
 
@@ -55,7 +57,7 @@ class HLDLC:
         return frame
 
     def _bit_stuffing(self, data):
-        print(f"Data: {data}")
+        logging.debug(f"Data: {data}")
         stuffed_data = b''
         for byte in data:
             if byte == self.FLAG_SEQUENCE or byte == self.ESCAPE_CHARACTER:
@@ -65,14 +67,14 @@ class HLDLC:
                 stuffed_data += struct.pack('B', byte)
 
 
-        print(f"Bit stuffed: {stuffed_data}")
+        logging.debug(f"Bit stuffed: {stuffed_data}")
 
         return stuffed_data
 
     async def receive_frame(self):
-        print("receiving frame")
+        logging.debug("receiving frame")
         frame = await self._read_frame()
-        print("received frame")
+        logging.debug("received frame")
         address, control, data, received_fcs = self._decode_frame(frame)
         calculated_fcs = self._calculate_fcs(address + control + data)
 
@@ -86,29 +88,29 @@ class HLDLC:
         start_flag_detected = False
         while True:
             byte = await self.reader.read(1)
-            print(f"read byte: {byte}")
+            logging.debug(f"read byte: {byte}")
             if byte == struct.pack('B', self.FLAG_SEQUENCE):
                 # End of frame detected
                 if len(buffer) > 0:
                     if not start_flag_detected:
-                        print(f"Error. : {buffer}")
+                        logging.debug(f"Error. : {buffer}")
                         buffer = b''
                         continue
-                    print(f"End detected. Buffer: {buffer}")
+                    logging.debug(f"End detected. Buffer: {buffer}")
                     return buffer
                 else:
                     start_flag_detected = True
-                print("Start flag detected.")
+                logging.debug("Start flag detected.")
             else:
                 buffer += byte
 
-            print(f"Buffer: {buffer}")
+            logging.debug(f"Buffer: {buffer}")
 
     def _decode_frame(self, frame):
         destuffed_frame = self._bit_destuffing(frame)
         address, control, data_with_fcs = (destuffed_frame[0:1], destuffed_frame[1:2], destuffed_frame[2:])
         data, received_fcs = data_with_fcs[:-2], data_with_fcs[-2:]
-        print(f"decoded frame:\n addr: {address}, control: {control}, data: {data}")
+        logging.debug(f"decoded frame:\n addr: {address}, control: {control}, data: {data}")
         return address, control, data, received_fcs
 
     def _bit_destuffing(self, data):
@@ -123,7 +125,7 @@ class HLDLC:
             else:
                 destuffed_data += struct.pack('B', byte)
 
-        print(f"destuffed_data: {destuffed_data}")
+        logging.debug(f"destuffed_data: {destuffed_data}")
         return destuffed_data
 
     def _calculate_fcs(self, data):
@@ -143,7 +145,7 @@ def read_serial():
             message = message.encode('utf-8')
             ser.write(message)
             x = ser.readline()  # read one byte+
-            print(x)
+            logging.debug(x)
             #time.sleep(2)
 """
 
@@ -159,9 +161,9 @@ async def main():
 
     received_address, received_control, received_data = await hldlc.receive_frame()
 
-    print('Received address:', received_address)
-    print('Received control:', received_control)
-    print('Received data:', received_data)
+    logging.debug('Received address:' + str(received_address))
+    logging.debug('Received control:' + str(received_control))
+    logging.debug('Received data:' + str(received_data))
 
     await hldlc.close()
 
