@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger_hldlc = logging.getLogger('logger_hldlc')
 logger_main = logging.getLogger('logger_main')
 
-logger_hldlc.setLevel(logging.DEBUG)
+logger_hldlc.setLevel(logging.INFO)
 logger_main.setLevel(logging.DEBUG)
 
 class HLDLC:
@@ -109,8 +109,9 @@ class HLDLC:
     async def receive_frame(self):
         logger_hldlc.debug("receiving frame")
         frame = await self._read_frame()
+        destuffed_frame = self._bit_destuffing(frame)
         logger_hldlc.debug("received frame")
-        return frame
+        return destuffed_frame
 
     async def _read_frame(self):
         buffer = b''
@@ -257,9 +258,12 @@ async def main_hldlc_stm32_test():
     # send only a raw frame without checksum and without address and control flags
     await hldlc.send_frame(data)
 
+    received_data = await hldlc.receive_frame()
+    logger_main.debug(f"Ground receiving:")
+    logger_main.debug('Received data:' + str(received_data.hex(sep=',')))
+
     while True:
         received_line = await hldlc.read_line()
-
         logger_main.debug(f"Ground receiving:")
         logger_main.debug('Received line:' + str(received_line))
 
