@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.DEBUG)
 logger_hldlc = logging.getLogger('logger_hldlc')
 logger_main = logging.getLogger('logger_main')
 
-logger_hldlc.setLevel(logging.INFO)
+logger_hldlc.setLevel(logging.DEBUG)
 logger_main.setLevel(logging.DEBUG)
 
 class HLDLC:
@@ -43,13 +43,29 @@ class HLDLC:
             self.writer.close()
             await self.writer.wait_closed()
 
-    async def send_frame(self, address, control, data):
-        frame = self._build_frame(address, control, data)
+    async def send_frame(self, data):
+        frame = self._build_frame(data)
         logger_hldlc.debug(f"sending frame: {frame}")
         self.writer.write(frame)
         await self.writer.drain()
 
-    def _build_frame(self, address, control, data):
+    async def send_full_frame(self, address, control, data):
+        frame = self._build_full_frame(address, control, data)
+        logger_hldlc.debug(f"sending frame: {frame}")
+        self.writer.write(frame)
+        await self.writer.drain()
+
+    def _build_frame(self, data):
+        start_flag = struct.pack('B', self.FLAG_SEQUENCE)
+        end_flag = struct.pack('B', self.FLAG_SEQUENCE)
+
+        data = self._bit_stuffing(data)
+
+        frame = start_flag + data + end_flag
+
+        return frame
+
+    def _build_full_frame(self, address, control, data):
         start_flag = struct.pack('B', self.FLAG_SEQUENCE)
         end_flag = struct.pack('B', self.FLAG_SEQUENCE)
 
@@ -78,7 +94,7 @@ class HLDLC:
 
         return stuffed_data
 
-    async def receive_frame(self):
+    async def receive_full_frame(self):
         logger_hldlc.debug("receiving frame")
         frame = await self._read_frame()
         logger_hldlc.debug("received frame")
@@ -89,6 +105,12 @@ class HLDLC:
             raise ValueError('Frame Check Sequence does not match')
 
         return address, control, data
+
+    async def receive_frame(self):
+        logger_hldlc.debug("receiving frame")
+        frame = await self._read_frame()
+        logger_hldlc.debug("received frame")
+        return frame
 
     async def _read_frame(self):
         buffer = b''
@@ -187,9 +209,9 @@ async def main_communication_selftest():
     control = 0x03
     data = cmd_as_bytes
 
-    await hldlc.send_frame(address, control, data)
+    await hldlc.send_full_frame(address, control, data)
 
-    received_address, received_control, received_data = await hldlc.receive_frame()
+    received_address, received_control, received_data = await hldlc.receive_full_frame()
 
     logger_main.debug(f"Spacecraft receiving:")
     logger_main.debug('Received address:' + str(received_address))
@@ -201,9 +223,9 @@ async def main_communication_selftest():
     logger_main.debug(f"Spacecraft -> Ground sending:")
     logger_main.debug(f"Ping reply [17,2] (hex): [{tm_as_bytes.hex(sep=',')}]")
 
-    await hldlc.send_frame(address, control, data)
+    await hldlc.send_full_frame(address, control, data)
 
-    received_address, received_control, received_data = await hldlc.receive_frame()
+    received_address, received_control, received_data = await hldlc.receive_full_frame()
 
     logger_main.debug(f"Ground receiving:")
     logger_main.debug('Received address:' + str(received_address))
@@ -220,8 +242,9 @@ async def main_hldlc_stm32_test():
 
     logger_main.debug(f"Ground receiving:")
     logger_main.debug('Received line:' + str(received_line))
+    await asyncio.sleep(2)
 
-    ping_cmd = PusTelecommand(service=17, subservice=1, apid=0x01)
+    ping_cmd = PusTelecommand(service=17, subservice=0x7D, apid=0x7E)
     cmd_as_bytes = ping_cmd.pack()
     logger_main.debug(f"Ground -> Spacecraft sending:")
     logger_main.debug(f"Ping telecommand [17,1] (hex): [{cmd_as_bytes.hex(sep=',')}]")
@@ -230,7 +253,9 @@ async def main_hldlc_stm32_test():
     control = 0x03
     data = cmd_as_bytes
 
-    await hldlc.send_frame(address, control, data)
+    #await hldlc.send_full_frame(address, control, data)
+    # send only a raw frame without checksum and without address and control flags
+    await hldlc.send_frame(data)
 
     while True:
         received_line = await hldlc.read_line()
