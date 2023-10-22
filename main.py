@@ -32,8 +32,8 @@ class HLDLC:
         self.writer = None
 
     async def open(self):
-        self.reader, self.writer = await serial_asyncio.open_serial_connection(url='/dev/tty.usbserial-0001',
-                       baudrate=9600,
+        self.reader, self.writer = await serial_asyncio.open_serial_connection(url='/dev/tty.usbserial-AR0JUI3E',
+                       baudrate=115200,
                        bytesize=serial.EIGHTBITS,
                        parity=serial.PARITY_NONE,
                        stopbits=serial.STOPBITS_ONE)
@@ -121,7 +121,7 @@ class HLDLC:
             logger_hldlc.debug(f"read byte: {byte}")
             if byte == struct.pack('B', self.FLAG_SEQUENCE):
                 # End of frame detected
-                if len(buffer) > 0:
+                if len(buffer) > 1:
                     if not start_flag_detected:
                         logger_hldlc.debug(f"Error. : {buffer}")
                         buffer = b''
